@@ -109,6 +109,12 @@ impl SimpleSession {
         self.gamestate.as_mut()
     }
 
+    // HACK FOR CONVENIENCE
+    #[must_use]
+    pub fn session(&self) -> Option<&Session> {
+        self.session.as_ref()
+    }
+
     /// Sends the command and updates the gamestate with the response from the
     /// server. A mutable reference to the gamestate will be returned. If an
     /// error is encountered, the gamestate is cleared and the error will be
