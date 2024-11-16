@@ -111,8 +111,8 @@ impl SimpleSession {
 
     // HACK FOR CONVENIENCE
     #[must_use]
-    pub fn session(&self) -> Option<&Session> {
-        self.session.as_ref()
+    pub fn session(&self) -> Session {
+        self.session.clone()
     }
 
     /// Sends the command and updates the gamestate with the response from the
