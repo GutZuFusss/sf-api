@@ -28,11 +28,6 @@ pub struct Character {
 
     /// The class of this character
     pub class: Class,
-    /// Iff this character is a druid, this will be the currently equiped mask
-    pub druid_mask: Option<DruidMask>,
-    /// Iff this character is a bard, this will be the currently equiped
-    /// instrument
-    pub bard_instrument: Option<BardInstrument>,
 
     /// The race of this character. Has some effects on attributes, which is
     /// why this is not in portrait
@@ -64,7 +59,7 @@ pub struct Character {
     /// The potions currently active
     pub active_potions: [Option<Potion>; 3],
 
-    /// The total armor of our character. Basically all equiped armor combined
+    /// The total armor of our character. Basically all equipped armor combined
     pub armor: u64,
 
     /// The min amount of damage the weapon claims it can do without any bonus
@@ -74,9 +69,9 @@ pub struct Character {
 
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    /// All bonus attributes from quipment/pets/potions
+    /// All bonus attributes from equipment/pets/potions
     pub attribute_additions: EnumMap<AttributeType, u32>,
-    /// The amount of times an atribute has been bought already.
+    /// The amount of times an attribute has been bought already.
     /// Important to calculate the price of the next attribute to buy
     pub attribute_times_bought: EnumMap<AttributeType, u32>,
 
@@ -168,6 +163,70 @@ pub enum Class {
     Necromancer,
 }
 
+#[allow(clippy::enum_glob_use)]
+impl Class {
+    #[must_use]
+    #[allow(clippy::enum_glob_use)]
+    pub fn main_attribute(&self) -> AttributeType {
+        use Class::*;
+        match self {
+            BattleMage | Berserker | Warrior => AttributeType::Strength,
+            Assassin | DemonHunter | Scout => AttributeType::Dexterity,
+            Druid | Bard | Necromancer | Mage => AttributeType::Intelligence,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn weapon_multiplier(self) -> f64 {
+        use Class::*;
+        match self {
+            Warrior | Assassin | BattleMage | Berserker => 2.0,
+            Scout => 2.5,
+            Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn armor_factor(self) -> f64 {
+        use Class::*;
+        match self {
+            Berserker => 0.5,
+            Warrior | Mage | Scout | DemonHunter | Druid | Assassin => 1.0,
+            Bard | Necromancer => 2.0,
+            BattleMage => 5.0,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn max_damage_reduction(self) -> f64 {
+        use Class::*;
+        match self {
+            Bard | BattleMage | DemonHunter | Warrior => 0.5,
+            Druid | Assassin | Berserker | Scout => 0.25,
+            Necromancer => 0.2,
+            Mage => 0.1,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn damage_factor(self, against: Class) -> f64 {
+        use Class::*;
+        match self {
+            // TODO: Are these right, or should this be a * 1.XX somewhere else
+            // instead?
+            Druid if against == Class::DemonHunter => 0.33 + 0.15,
+            Druid if against == Class::Mage => 0.33 + 0.33,
+            Druid => 0.33,
+            Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
+            Necromancer => 0.56,
+            Assassin => 0.625,
+            Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,
+            Bard => 1.125,
+            Berserker => 1.25,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
@@ -198,6 +257,23 @@ pub enum Race {
     DarkElf,
     Goblin,
     Demon,
+}
+
+impl Race {
+    #[must_use]
+    pub fn stat_modifiers(self) -> EnumMap<AttributeType, i32> {
+        let raw = match self {
+            Race::Human => [0, 0, 0, 0, 0],
+            Race::Elf => [-1, 2, 0, -1, 0],
+            Race::Dwarf => [0, -2, -1, 2, 1],
+            Race::Gnome => [-2, 3, -1, -1, 1],
+            Race::Orc => [1, 0, -1, 0, 0],
+            Race::DarkElf => [-2, 2, 1, -1, 0],
+            Race::Goblin => [-2, 2, 0, -1, 1],
+            Race::Demon => [3, -1, 0, 1, -3],
+        };
+        EnumMap::from_array(raw)
+    }
 }
 
 #[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq, Hash)]

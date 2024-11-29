@@ -1,8 +1,8 @@
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use log::{error, warn};
-use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
@@ -26,15 +26,17 @@ pub struct Inventory {
 }
 
 impl Inventory {
-    pub fn free_slot(&self) -> Option<(PlayerItemPlace, usize)> {
+    /// Returns a place in the inventory, that can store a new item
+    #[must_use]
+    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
         if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
-            return Some((PlayerItemPlace::MainInventory, bag_pos));
+            return Some((InventoryType::MainInventory, bag_pos));
         } else if let Some(e_bag_pos) = self
             .fortress_chest
             .as_ref()
             .and_then(|a| a.iter().position(Option::is_none))
         {
-            return Some((PlayerItemPlace::ExtendedInventory, e_bag_pos));
+            return Some((InventoryType::ExtendedInventory, e_bag_pos));
         }
         None
     }
@@ -138,7 +140,7 @@ pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 impl Equipment {
     #[must_use]
-    /// Checks if the character has an item with the enchantment equiped
+    /// Checks if the character has an item with the enchantment equipped
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
         let item = self.0.get(enchantment.equipment_slot());
         if let Some(item) = item {
@@ -183,7 +185,7 @@ pub struct Item {
     /// or the weapon types damages though, if you want to have a safe
     /// abstraction. This is only public in case I am missing a case here
     pub type_specific_val: u32,
-    /// The stats this item gives, when equiped
+    /// The stats this item gives, when equipped
     pub attributes: EnumMap<AttributeType, u32>,
     /// The gemslot of this item, if any. A gemslot can be filled or empty
     pub gem_slot: Option<GemSlot>,
@@ -240,6 +242,75 @@ impl Item {
         }
     }
 
+    /// Checks if a companion of the given class can equip this item.
+    ///
+    /// Returns `true` if the item itself is equipment and this class has the
+    /// ability to wear it
+    #[must_use]
+    pub fn can_be_equipped_by_companion(
+        &self,
+        class: impl Into<Class>,
+    ) -> bool {
+        !self.typ.is_shield() && self.can_be_equipped_by(class.into())
+    }
+
+    /// Checks if a character of the given class can equip this item. Note that
+    /// this only checks the class, so this will make no sense if you use this
+    /// for anything that can not equip items at all (monsters, etc.). For
+    /// companions you should use `can_companion_equip`
+    ///
+    /// Returns `true` if the item itself is equipment and this class has the
+    /// ability to wear it
+    #[must_use]
+    pub fn can_be_equipped_by(&self, class: Class) -> bool {
+        self.typ.equipment_slot().is_some() && self.can_be_used_by(class)
+    }
+
+    /// Checks if a character of the given class can use this item. If you want
+    /// to check equipment, you should use `can_be_equipped_by`
+    ///
+    /// Returns `true` if the item does not have a class requirement, or if the
+    /// class requirement matches the given class.
+    #[must_use]
+    #[allow(clippy::enum_glob_use, clippy::match_same_arms)]
+    pub fn can_be_used_by(&self, class: Class) -> bool {
+        use Class::*;
+
+        // Without a class requirement any class can use this
+        let Some(class_requirement) = self.class else {
+            return true;
+        };
+
+        // Class requirements
+        // Warrior => Weapon: Meele,  Armor: Heavy
+        // Scout   => Weapon: Ranged, Armor: Medium
+        // Mage    => Weapon: Magic,  Armor: Light
+        match (class, class_requirement) {
+            // Weapon: Meele, Armor: Heavy
+            (Warrior, Warrior) => true,
+            (Berserker, Warrior) => !self.typ.is_shield(),
+            // Weapon: Ranged, Armor: Medium
+            (Scout, Scout) => true,
+            // Weapon: Magic, Armor: Light
+            (Mage | Necromancer, Mage) => true,
+            // Weapon: Meele, Armor: Medium
+            (Assassin, Warrior) => self.typ.is_weapon(),
+            (Assassin, Scout) => !self.typ.is_weapon(),
+            // Weapon: Magic, Armor: Medium
+            (Bard | Druid, Mage) => self.typ.is_weapon(),
+            (Bard | Druid, Scout) => !self.typ.is_weapon(),
+            // Weapon: Meele, Armor: Light
+            (BattleMage, Warrior) => self.typ.is_weapon(),
+            (BattleMage, Mage) => !self.typ.is_weapon(),
+            // Weapon: Ranged, Armor: Heavy
+            (DemonHunter, Scout) => self.typ.is_weapon(),
+            (DemonHunter, Warrior) => {
+                !self.typ.is_weapon() && !self.typ.is_shield()
+            }
+            _ => false,
+        }
+    }
+
     /// Parses an item, that starts at the start of the given data
     pub(crate) fn parse(
         data: &[i64],
@@ -250,7 +321,8 @@ impl Item {
         };
 
         let enchantment = data.cfpget(0, "item enchantment", |a| a >> 24)?;
-        let gem_slot_val = data.cimget(0, "gem slot val", |a| a >> 16 & 0xF)?;
+        let gem_slot_val =
+            data.cimget(0, "gem slot val", |a| (a >> 16) & 0xFF)?;
         let gem_pwr = data.cimget(11, "gem pwr", |a| a >> 16)?;
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
@@ -403,7 +475,8 @@ impl Enchantment {
         }
     }
 
-    pub(crate) fn enchant_id(self) -> u32 {
+    #[must_use]
+    pub fn enchant_id(self) -> u32 {
         ((self as u32) / 10) * 10
     }
 }
@@ -415,7 +488,7 @@ pub struct Rune {
     /// The type of tune this is
     pub typ: RuneType,
     /// The "strength" of this rune. So a value like 50 here and a typ of
-    /// `FireResistance` would mean 50% fire resistence
+    /// `FireResistance` would mean 50% fire resistance
     pub value: u8,
 }
 
@@ -450,14 +523,18 @@ pub enum GemSlot {
 
 impl GemSlot {
     pub(crate) fn parse(slot_val: i64, gem_pwr: i64) -> Option<GemSlot> {
-        if slot_val == 0 {
-            return None;
+        match slot_val {
+            0 => return None,
+            1 => return Some(GemSlot::Empty),
+            _ => {}
         }
+
         let Ok(value) = gem_pwr.try_into() else {
             warn!("Invalid gem power {gem_pwr}");
             return None;
         };
-        match GemType::parse(slot_val) {
+
+        match GemType::parse(slot_val, value) {
             Some(typ) => Some(GemSlot::Filled(Gem { typ, value })),
             None => Some(GemSlot::Empty),
         }
@@ -528,6 +605,18 @@ pub enum ItemType {
 }
 
 impl ItemType {
+    /// Checks if this item type is a weapon.
+    #[must_use]
+    pub const fn is_weapon(self) -> bool {
+        matches!(self, ItemType::Weapon { .. })
+    }
+
+    /// Checks if this item type is a shield.
+    #[must_use]
+    pub const fn is_shield(self) -> bool {
+        matches!(self, ItemType::Shield { .. })
+    }
+
     /// Checks if this type can only be worn by only a particular class
     #[must_use]
     pub fn is_class_item(&self) -> bool {
@@ -561,7 +650,7 @@ impl ItemType {
         )
     }
 
-    /// The equipment slot, that this item type can be equiped to
+    /// The equipment slot, that this item type can be equipped to
     #[must_use]
     pub fn equipment_slot(&self) -> Option<EquipmentSlot> {
         Some(match self {
@@ -668,10 +757,10 @@ impl ItemType {
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let Some(typ) = GemType::parse(sub_ident) else {
+                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
+                let Some(typ) = GemType::parse(sub_ident, pwr) else {
                     return unknown_item("gem type");
                 };
-                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
                 let gem = Gem { typ, value: pwr };
                 ItemType::Gem(gem)
             }
@@ -737,6 +826,18 @@ pub enum PotionType {
     EternalLife,
 }
 
+impl From<AttributeType> for PotionType {
+    fn from(value: AttributeType) -> Self {
+        match value {
+            AttributeType::Strength => PotionType::Strength,
+            AttributeType::Dexterity => PotionType::Dexterity,
+            AttributeType::Intelligence => PotionType::Intelligence,
+            AttributeType::Constitution => PotionType::Constitution,
+            AttributeType::Luck => PotionType::Luck,
+        }
+    }
+}
+
 impl PotionType {
     pub(crate) fn parse(id: i64) -> Option<PotionType> {
         if id == 0 {
@@ -766,6 +867,15 @@ pub enum PotionSize {
 }
 
 impl PotionSize {
+    #[must_use]
+    pub fn effect(&self) -> f64 {
+        match self {
+            PotionSize::Small => 0.1,
+            PotionSize::Medium => 0.15,
+            PotionSize::Large => 0.25,
+        }
+    }
+
     pub(crate) fn parse(id: i64) -> Option<Self> {
         Some(match id {
             1..=5 => PotionSize::Small,
@@ -779,7 +889,7 @@ impl PotionSize {
 #[derive(Debug, Clone, PartialEq, Eq, Copy, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Differenciates resource items
+/// Differentiates resource items
 pub enum ResourceType {
     Wood = 17,
     Stone,
@@ -813,27 +923,25 @@ pub enum GemType {
 }
 
 impl GemType {
-    pub(crate) fn parse(id: i64) -> Option<GemType> {
-        if id == 4 {
-            return Some(GemType::Legendary);
-        }
-
-        if !(10..=40).contains(&id) {
-            return None;
-        }
-
-        // NOTE: id / 10 should be the shape
-        Some(match id % 10 {
-            0 => GemType::Strength,
-            1 => GemType::Dexterity,
-            2 => GemType::Intelligence,
-            3 => GemType::Constitution,
-            4 => GemType::Luck,
-            5 => GemType::All,
-            // Just put this here because it makes sense. I only ever see 4 for
-            // these
-            6 => GemType::Legendary,
+    pub(crate) fn parse(id: i64, debug_value: u32) -> Option<GemType> {
+        Some(match id {
+            0 | 1 => return None,
+            10..=40 => match id % 10 {
+                0 => GemType::Strength,
+                1 => GemType::Dexterity,
+                2 => GemType::Intelligence,
+                3 => GemType::Constitution,
+                4 => GemType::Luck,
+                5 => GemType::All,
+                // Just put this here because it makes sense. I only ever
+                // see 4 for these
+                6 => GemType::Legendary,
+                _ => {
+                    return None;
+                }
+            },
             _ => {
+                warn!("Unknown gem: {id} - {debug_value}");
                 return None;
             }
         })
@@ -843,7 +951,7 @@ impl GemType {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Denotes the place, where an item is equiped
+/// Denotes the place, where an item is equipped
 pub enum EquipmentSlot {
     Hat = 1,
     BreastPlate,
@@ -880,7 +988,7 @@ impl EquipmentSlot {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// An item useable for pets
+/// An item usable for pets
 pub enum PetItem {
     Egg(HabitatType),
     SpecialEgg(HabitatType),
