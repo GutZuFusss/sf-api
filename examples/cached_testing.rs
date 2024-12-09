@@ -5,7 +5,7 @@ use sf_api::{
     gamestate::{dungeons::LightDungeon, GameState},
     misc::EnumMapGet,
     session::*,
-    simulate::{Battle, BattleFighter, BattleSide, PlayerFighterSquad},
+    simulate::{Battle, BattleFighter, BattleSide, PlayerFighterSquad, BattleLogger, BattleEvent},
     sso::SFAccount,
 };
 use strum::IntoEnumIterator;
@@ -16,7 +16,7 @@ pub async fn main() {
         .filter_level(log::LevelFilter::Debug)
         .init();
 
-    const SSO: bool = false;
+    const SSO: bool = true;
     const USE_CACHE: bool = true;
 
     let custom_resp: Option<&str> = None;
@@ -83,20 +83,13 @@ pub async fn main() {
             let monster = BattleFighter::from_monster(monster);
             let mut monster = [monster];
             let mut battle = Battle::new(&mut player_squad, &mut monster);
-            let mut winners: EnumMap<BattleSide, u32> = EnumMap::default();
-            let rounds: usize = 100_000;
-            let now = Instant::now();
-            for _ in 0..rounds {
-                let winner = battle.simulate(&mut ());
-                *winners.get_mut(winner) += 1;
+
+            for a in 0..3 {
+                battle.simulate_turn(&mut ());
+                let right_hp = battle.right.current().unwrap().current_hp;
+                let left_hp = battle.left.current().unwrap().current_hp;
+                println!("{} Right HP: {}, Left HP: {}", a, right_hp, left_hp);
             }
-            println!(
-                "won {:.2}% against {dungeon:?} ({:?}) lvl {} in {:?}",
-                (*winners.get(BattleSide::Left) as f32 / rounds as f32) * 100.0,
-                monster[0].class,
-                monster[0].level,
-                now.elapsed()
-            );
         }
 
         return;

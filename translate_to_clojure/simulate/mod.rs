@@ -67,8 +67,6 @@ pub enum HarpQuality {
     Good,
 }
 
-// Modified, but mostly copied from:
-// https://github.com/HafisCZ/sf-tools/blob/521c2773098d62fe21ae687de2047c05f84813b7/js/sim/base.js#L746C4-L765C6
 fn calc_unarmed_base_dmg(
     slot: EquipmentSlot,
     level: u16,
@@ -281,19 +279,19 @@ impl BattleFighter {
 
 #[derive(Debug, Clone)]
 pub struct EquipmentEffects {
-    pub element_res: EnumMap<Element, f64>,
-    pub element_dmg: EnumMap<Element, f64>,
+    element_res: EnumMap<Element, f64>,
+    element_dmg: EnumMap<Element, f64>,
 
-    pub weapon: (u32, u32),
+    weapon: (u32, u32),
     /// min,max for weapons | blockchange, 0 for shields
-    pub offhand: (u32, u32),
+    offhand: (u32, u32),
 
     /// Shadow of the cowboy
-    pub reaction_boost: bool,
+    reaction_boost: bool,
     /// Sword of Vengeance
-    pub extra_crit_dmg: bool,
+    extra_crit_dmg: bool,
 
-    pub armor: u32,
+    armor: u32,
 }
 
 #[derive(Debug, Clone, Copy, Enum, EnumIter)]
