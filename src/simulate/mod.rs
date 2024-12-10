@@ -1017,7 +1017,7 @@ impl Monster {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum BattleEvent<'a, 'b> {
     TurnUpdate(&'a Battle<'b>),
