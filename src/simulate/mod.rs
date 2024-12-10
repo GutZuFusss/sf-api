@@ -272,6 +272,43 @@ impl BattleFighter {
         res
     }
 
+    #[must_use]
+    #[allow(clippy::enum_glob_use)]
+    pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>, 
+                            has_eternal_life: bool, portal_hp_bonus: u32,
+                            rune_bonus_percent: u32) -> i64 {
+        use Class::*;
+
+        let mut total = i64::from(*attributes.get(AttributeType::Constitution));
+        total = (total as f64
+            * match self.class {
+                Warrior if self.is_companion => 6.1,
+                Warrior | BattleMage | Druid => 5.0,
+                Scout | Assassin | Berserker | DemonHunter | Necromancer => 4.0,
+                Mage | Bard => 2.0,
+            })
+        .trunc() as i64;
+
+        total *= i64::from(self.level) + 1;
+
+        if has_eternal_life {
+            total = (total as f64 * 1.25).trunc() as i64;
+        }
+
+        let portal_bonus = (total as f64
+            * (f64::from(portal_hp_bonus) / 100.0))
+            .trunc() as i64;
+
+        total += portal_bonus;
+
+
+        let rune_bonus =
+            (total as f64 * (f64::from(rune_bonus_percent) / 100.0)).trunc() as i64;
+
+        total += rune_bonus;
+        total
+    }
+
     pub fn reset(&mut self) {
         self.class_effect = ClassEffect::Normal;
         self.current_hp = self.max_hp;

@@ -5,7 +5,7 @@ use sf_api::{
     gamestate::{dungeons::LightDungeon, GameState},
     misc::EnumMapGet,
     session::*,
-    simulate::{Battle, BattleFighter, BattleSide, PlayerFighterSquad, BattleLogger, BattleEvent},
+    simulate::{Battle, BattleEvent, BattleFighter, BattleLogger, BattleSide, BattleTeam, PlayerFighterSquad, UpgradeableFighter},
     sso::SFAccount,
 };
 use strum::IntoEnumIterator;
@@ -73,6 +73,19 @@ pub async fn main() {
         let js = serde_json::to_string_pretty(&gd).unwrap();
         std::fs::write("character.json", js).unwrap();
 
+        let uf = UpgradeableFighter {
+            is_companion: false,
+            level: 1,
+            class: Default::default(),
+            attribute_basis: Default::default(),
+            _attributes_bought: Default::default(),
+            pet_attribute_bonus_perc: Default::default(),
+            equipment: Default::default(),
+            active_potions: Default::default(),
+            portal_hp_bonus: 0,
+            portal_dmg_bonus: 0,
+        };
+
         let squad = PlayerFighterSquad::new(&gd);
         let player = BattleFighter::from_upgradeable(&squad.character);
         let mut player_squad = [player];
@@ -89,6 +102,7 @@ pub async fn main() {
                 let right_hp = battle.right.current().unwrap().current_hp;
                 let left_hp = battle.left.current().unwrap().current_hp;
                 println!("{} Right HP: {}, Left HP: {}", a, right_hp, left_hp);
+                println!("{:?}", battle.left.current().unwrap())
             }
         }
 
