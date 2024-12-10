@@ -22,21 +22,21 @@ use BattleEvent as BE;
 
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
-    is_companion: bool,
-    level: u16,
-    class: Class,
+    pub is_companion: bool,
+    pub level: u16,
+    pub class: Class,
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    _attributes_bought: EnumMap<AttributeType, u32>,
-    pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
+    pub _attributes_bought: EnumMap<AttributeType, u32>,
+    pub pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
-    equipment: Equipment,
-    active_potions: [Option<Potion>; 3],
+    pub equipment: Equipment,
+    pub active_potions: [Option<Potion>; 3],
     /// This should be the percentage bonus to skills from pets
     /// The hp bonus in percent this player has from the personal demon portal
-    portal_hp_bonus: u32,
+    pub portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
-    portal_dmg_bonus: u32,
+    pub portal_dmg_bonus: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
